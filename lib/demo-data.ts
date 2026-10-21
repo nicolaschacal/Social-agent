@@ -8,7 +8,7 @@ export const demoOpportunities: Opportunity[] = [
     urgency: "hot",
     title: "Samsung + USDC distribution",
     sourceName: "Solana ecosystem signal",
-    sourceUrl: "https://x.com/search?q=Samsung%20Solana%20USDC",
+    sourceUrl: "https://solana.com/news",
     whyItMatters:
       "Consumer distribution matters more than the headline. If normal users can hold and move dollars without thinking about crypto, the interesting question becomes where that money goes next.",
     angle:
@@ -23,26 +23,27 @@ export const demoOpportunities: Opportunity[] = [
     observedAt: "2026-10-21T08:10:00Z",
   },
   {
-    id: "founder-reply",
+    id: "stablecoin-reply",
     kind: "reply",
     score: 9.1,
     urgency: "hot",
-    title: "Good early reply surface",
-    sourceName: "@examplefounder",
-    sourceUrl: "https://x.com/",
+    title: "Solana stablecoin supply hit a new ATH",
+    sourceName: "@solana",
+    sourceUrl: "https://x.com/solana/status/2103484678590353515",
+    xPostUrl: "https://x.com/solana/status/2103484678590353515",
     sourceText:
-      "Stablecoins are becoming the default settlement layer for internet businesses.",
+      "Stablecoin supply on Solana hits a new all-time high of $17.3B.",
     whyItMatters:
-      "The original post already has the audience. A thoughtful early reply can create profile discovery without manufacturing a separate post.",
+      "The original post already has the audience. A useful reply can move the conversation from the headline number to what that capital can actually do onchain.",
     angle:
-      "Push the idea one step further: users may never know which chain settles the payment, so infrastructure wins by becoming invisible.",
+      "The interesting question is not just how much stablecoin supply exists, but which apps capture the next dollar once it arrives.",
     draft:
-      "this is the part I keep coming back to\n\nif this actually works, the end user probably won't know or care what chain settled anything\n\nthe winning infrastructure becomes invisible",
+      "the number is big but I think the more interesting question is where the next dollar goes after it lands on Solana\n\npayments, lending, trading, consumer apps... that's the part I'm watching",
     variants: [
-      "I think the weird end state is that 'using crypto' disappears as a concept\n\npeople just move dollars and the chain becomes plumbing",
-      "exactly. the UX gets interesting when nobody has to make a conscious decision to go onchain",
+      "17.3B sitting on Solana is one thing\n\nwhat I'm more interested in is which products become the default place that money gets spent, invested or moved",
+      "stablecoin supply keeps climbing and I still think people are underestimating the second-order effect\n\nmore dollars onchain means more competition for where those dollars actually go",
     ],
-    tags: ["reply", "stablecoins", "payments"],
+    tags: ["reply", "stablecoins", "capital"],
     observedAt: "2026-10-21T08:18:00Z",
   },
   {
@@ -70,16 +71,18 @@ export const demoOpportunities: Opportunity[] = [
     kind: "follow",
     score: 8.2,
     urgency: "fresh",
-    title: "Potential high-signal builder",
-    sourceName: "@newsolanabuilder",
-    sourceUrl: "https://x.com/",
+    title: "High-signal payments account",
+    sourceName: "@solanapayments",
+    sourceUrl: "https://x.com/solanapayments",
+    profileUrl: "https://x.com/solanapayments",
     whyItMatters:
-      "Following high-signal builders improves the future research graph and exposes launches before they become broad ecosystem news.",
+      "Following high-signal ecosystem accounts improves the future research graph and exposes payment launches before they become broad Solana news.",
     angle:
-      "This account repeatedly posts product details rather than token promotion.",
-    accountHandle: "@newsolanabuilder",
-    accountReason: "Building a consumer Solana app and posting frequent product updates.",
-    tags: ["builder", "consumer"],
+      "This account consistently surfaces payment integrations, stablecoin rails and real-world adoption signals.",
+    accountHandle: "@solanapayments",
+    accountReason:
+      "Focused on payment infrastructure, stablecoins and real-world Solana adoption.",
+    tags: ["payments", "stablecoins"],
     observedAt: "2026-10-21T07:40:00Z",
   },
   {
