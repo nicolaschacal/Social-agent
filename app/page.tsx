@@ -2,21 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { demoOpportunities } from "@/lib/demo-data";
-import type {
-  FeedbackTag,
-  Opportunity,
-  OpportunityKind,
-  StyleFeedback,
-} from "@/lib/types";
-
-type Filter = "all" | OpportunityKind;
-
-const filters: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "post", label: "Posts" },
-  { key: "reply", label: "Replies" },
-  { key: "follow", label: "Follows" },
-];
+import type { FeedbackTag, Opportunity, StyleFeedback } from "@/lib/types";
 
 const feedbackLabels: { tag: FeedbackTag; label: string }[] = [
   { tag: "sounds-like-me", label: "Sounds like me" },
@@ -26,322 +12,300 @@ const feedbackLabels: { tag: FeedbackTag; label: string }[] = [
   { tag: "more-casual", label: "More casual" },
 ];
 
-function urgencyLabel(opportunity: Opportunity) {
-  if (opportunity.urgency === "hot") return "HOT";
-  if (opportunity.urgency === "fresh") return "FRESH";
-  return "WATCH";
+function urgencyLabel(item: Opportunity) {
+  if (item.urgency === "hot") return "Do this now";
+  if (item.urgency === "fresh") return "Fresh";
+  return "Worth watching";
 }
 
-function timeLabel(iso: string) {
-  const date = new Date(iso);
-  const minutes = Math.max(
-    1,
-    Math.round((Date.now() - date.getTime()) / (1000 * 60)),
-  );
-
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
+function actionLabel(item: Opportunity) {
+  if (item.kind === "reply") return "Reply";
+  if (item.kind === "follow") return "Follow";
+  return "Post";
 }
 
 export default function Home() {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [queue, setQueue] = useState<Opportunity[]>(demoOpportunities);
+  const initialQueue = useMemo(
+    () => [...demoOpportunities].sort((a, b) => b.score - a.score),
+    [],
+  );
+
+  const [queue, setQueue] = useState<Opportunity[]>(initialQueue);
+  const [completed, setCompleted] = useState(0);
   const [draftVariant, setDraftVariant] = useState<Record<string, number>>({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<StyleFeedback[]>([]);
+  const [showDetails, setShowDetails] = useState(false);
   const [showTraining, setShowTraining] = useState(false);
+  const [lastAction, setLastAction] = useState<{
+    item: Opportunity;
+    result: "done" | "skipped";
+  } | null>(null);
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem("social-agent-feedback");
       if (saved) setFeedback(JSON.parse(saved));
-    } catch {
-      // Local storage is optional; the app still works without it.
-    }
+    } catch {}
   }, []);
 
-  const visible = useMemo(() => {
-    const sorted = [...queue].sort((a, b) => b.score - a.score);
-    if (filter === "all") return sorted;
-    return sorted.filter((item) => item.kind === filter);
-  }, [filter, queue]);
-
-  const stats = useMemo(
-    () => ({
-      hot: queue.filter((item) => item.urgency === "hot").length,
-      posts: queue.filter((item) => item.kind === "post").length,
-      replies: queue.filter((item) => item.kind === "reply").length,
-      follows: queue.filter((item) => item.kind === "follow").length,
-    }),
-    [queue],
-  );
+  const current = queue[0];
+  const total = initialQueue.length;
+  const progress = total ? Math.round((completed / total) * 100) : 100;
 
   function currentDraft(item: Opportunity) {
     const options = [item.draft, ...(item.variants ?? [])].filter(
       (value): value is string => Boolean(value),
     );
     if (!options.length) return "";
-    const index = draftVariant[item.id] ?? 0;
-    return options[index % options.length];
+    return options[(draftVariant[item.id] ?? 0) % options.length];
   }
 
   function rewrite(item: Opportunity) {
-    const optionCount = [item.draft, ...(item.variants ?? [])].filter(Boolean)
-      .length;
-    if (optionCount <= 1) return;
-    setDraftVariant((current) => ({
-      ...current,
-      [item.id]: ((current[item.id] ?? 0) + 1) % optionCount,
+    const options = [item.draft, ...(item.variants ?? [])].filter(Boolean);
+    if (options.length <= 1) return;
+
+    setDraftVariant((state) => ({
+      ...state,
+      [item.id]: ((state[item.id] ?? 0) + 1) % options.length,
     }));
+    setCopied(false);
   }
 
   async function copyDraft(item: Opportunity) {
-    const draft = currentDraft(item);
-    if (!draft) return;
-    await navigator.clipboard.writeText(draft);
-    setCopiedId(item.id);
-    window.setTimeout(() => setCopiedId(null), 1200);
+    const text = currentDraft(item);
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
   }
 
-  function skip(id: string) {
-    setQueue((current) => current.filter((item) => item.id !== id));
+  function advance(result: "done" | "skipped") {
+    if (!current) return;
+    setLastAction({ item: current, result });
+    setQueue((items) => items.slice(1));
+    setCompleted((value) => value + 1);
+    setCopied(false);
+    setShowDetails(false);
+    setShowTraining(false);
   }
 
-  function saveFeedback(opportunityId: string, tag: FeedbackTag) {
+  function undo() {
+    if (!lastAction) return;
+    setQueue((items) => [lastAction.item, ...items]);
+    setCompleted((value) => Math.max(0, value - 1));
+    setLastAction(null);
+  }
+
+  function saveFeedback(tag: FeedbackTag) {
+    if (!current) return;
     const entry: StyleFeedback = {
-      opportunityId,
+      opportunityId: current.id,
       tag,
       createdAt: new Date().toISOString(),
     };
-
     const next = [entry, ...feedback].slice(0, 100);
     setFeedback(next);
+
     try {
       window.localStorage.setItem("social-agent-feedback", JSON.stringify(next));
-    } catch {
-      // No-op when storage is unavailable.
-    }
+    } catch {}
   }
 
+  if (!current) {
+    return (
+      <main className="agentShell">
+        <header className="agentHeader">
+          <div className="brand">
+            <div className="brandMark">S</div>
+            <div>
+              <div className="brandName">Social Agent</div>
+              <div className="brandSub">Solana growth copilot</div>
+            </div>
+          </div>
+          <span className="liveBadge"><i /> session complete</span>
+        </header>
+
+        <section className="completeScreen">
+          <div className="completeOrb">✓</div>
+          <p className="eyebrow">QUEUE CLEARED</p>
+          <h1>You&apos;re done for now.</h1>
+          <p>
+            The agent has no more actions in this session. When live research is
+            connected, new opportunities will appear here automatically.
+          </p>
+          <div className="completeStats">
+            <strong>{completed}</strong>
+            <span>actions reviewed</span>
+          </div>
+          <button className="secondaryButton" onClick={undo} disabled={!lastAction}>
+            Undo last action
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  const draft = currentDraft(current);
+
   return (
-    <main className="shell">
-      <header className="topbar">
+    <main className="agentShell">
+      <header className="agentHeader">
         <div className="brand">
           <div className="brandMark">S</div>
           <div>
             <div className="brandName">Social Agent</div>
-            <div className="brandSub">Solana signal desk</div>
+            <div className="brandSub">Solana growth copilot</div>
           </div>
         </div>
 
-        <div className="topActions">
-          <span className="statusDot">
-            <i />
-            Demo radar
-          </span>
-          <button
-            className="ghostButton"
-            onClick={() => setShowTraining((value) => !value)}
-          >
-            Style memory · {feedback.length}
-          </button>
+        <div className="agentStatus">
+          <span className="liveBadge"><i /> agent online</span>
+          <span className="counter">{completed + 1}/{total}</span>
         </div>
       </header>
 
-      <section className="hero">
-        <div>
-          <p className="eyebrow">TODAY&apos;S QUEUE</p>
-          <h1>Find the signal.<br />Keep the human voice.</h1>
-          <p className="heroText">
-            Ranked Solana opportunities for posts, replies and people worth
-            following. The agent does the research. You make the final click.
-          </p>
-        </div>
+      <div className="progressTrack" aria-label="Session progress">
+        <div style={{ width: `${progress}%` }} />
+      </div>
 
-        <div className="stats">
-          <div className="stat">
-            <strong>{stats.hot}</strong>
-            <span>hot now</span>
-          </div>
-          <div className="stat">
-            <strong>{stats.posts}</strong>
-            <span>post ideas</span>
-          </div>
-          <div className="stat">
-            <strong>{stats.replies}</strong>
-            <span>replies</span>
-          </div>
-          <div className="stat">
-            <strong>{stats.follows}</strong>
-            <span>follows</span>
-          </div>
-        </div>
-      </section>
-
-      {showTraining && (
-        <section className="trainingPanel">
+      <section className="agentStage">
+        <div className="agentThinking">
+          <span className="pulseOrb">S</span>
           <div>
-            <p className="eyebrow">STYLE MEMORY</p>
-            <h2>The agent learns from your clicks.</h2>
+            <span className="thinkingLabel">NEXT BEST ACTION</span>
             <p>
-              V1 keeps feedback locally in this browser. Once persistence is
-              connected, this becomes part of the agent&apos;s long-term editorial
-              memory.
+              I found something worth your attention. This is the highest-scored
+              item in your queue right now.
             </p>
           </div>
-          <div className="memorySummary">
-            {feedback.length === 0 ? (
-              <span>No feedback yet.</span>
+        </div>
+
+        <article className="actionCard">
+          <div className="actionMeta">
+            <span className={`actionType ${current.kind}`}>
+              {actionLabel(current)}
+            </span>
+            <span className={`urgency ${current.urgency}`}>
+              {urgencyLabel(current)}
+            </span>
+            <span className="score">{current.score.toFixed(1)}/10</span>
+          </div>
+
+          <h1>{current.title}</h1>
+
+          {current.sourceText && (
+            <blockquote className="sourceText">{current.sourceText}</blockquote>
+          )}
+
+          {current.kind === "follow" ? (
+            <div className="followBlock">
+              <span className="draftLabel">ACCOUNT TO CHECK</span>
+              <strong>{current.accountHandle}</strong>
+              <p>{current.accountReason}</p>
+            </div>
+          ) : (
+            <div className="draftBlock">
+              <div className="draftHeader">
+                <span className="draftLabel">I&apos;D SAY THIS</span>
+                <button className="tinyButton" onClick={() => rewrite(current)}>
+                  Rewrite
+                </button>
+              </div>
+              <p>{draft}</p>
+            </div>
+          )}
+
+          <div className="primaryActions">
+            {current.kind === "follow" ? (
+              <a
+                href={current.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="primaryButton"
+              >
+                Open profile ↗
+              </a>
             ) : (
-              feedback.slice(0, 6).map((item, index) => (
-                <span key={`${item.createdAt}-${index}`}>
-                  {item.tag.replaceAll("-", " ")}
-                </span>
-              ))
+              <>
+                <button className="primaryButton" onClick={() => copyDraft(current)}>
+                  {copied ? "Copied ✓" : "Copy text"}
+                </button>
+                <a
+                  href={current.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="secondaryButton"
+                >
+                  Open on X ↗
+                </a>
+              </>
             )}
+
+            <button className="doneButton" onClick={() => advance("done")}>
+              Done · next →
+            </button>
           </div>
-        </section>
-      )}
 
-      <nav className="filters" aria-label="Opportunity filters">
-        {filters.map((item) => (
-          <button
-            key={item.key}
-            className={filter === item.key ? "filter active" : "filter"}
-            onClick={() => setFilter(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      <section className="queue">
-        {visible.length === 0 ? (
-          <div className="emptyState">
-            <strong>Queue cleared.</strong>
-            <p>Nothing left in this view. Switch filters or refresh the radar.</p>
+          <div className="decisionRow">
+            <button className="skipButton" onClick={() => advance("skipped")}>
+              Skip
+            </button>
+            <button
+              className="detailButton"
+              onClick={() => setShowDetails((value) => !value)}
+            >
+              {showDetails ? "Hide reasoning" : "Why this?"}
+            </button>
+            <button
+              className="detailButton"
+              onClick={() => setShowTraining((value) => !value)}
+            >
+              Train voice
+            </button>
           </div>
-        ) : (
-          visible.map((item) => {
-            const draft = currentDraft(item);
-            return (
-              <article className="card" key={item.id}>
-                <div className="cardTop">
-                  <div className="scoreWrap">
-                    <span className={`urgency ${item.urgency}`}>
-                      {urgencyLabel(item)}
-                    </span>
-                    <strong className="score">{item.score.toFixed(1)}</strong>
-                  </div>
-                  <span className="age">{timeLabel(item.observedAt)}</span>
-                </div>
 
-                <div className="cardHeader">
-                  <div>
-                    <span className="kind">{item.kind}</span>
-                    <h2>{item.title}</h2>
-                  </div>
-                  <a
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="sourceLink"
-                  >
-                    Open source ↗
-                  </a>
-                </div>
+          {showDetails && (
+            <div className="reasonPanel">
+              <div>
+                <span>WHY I PICKED IT</span>
+                <p>{current.whyItMatters}</p>
+              </div>
+              <div>
+                <span>ANGLE</span>
+                <p>{current.angle}</p>
+              </div>
+              <div className="tagLine">
+                {current.tags.map((tag) => (
+                  <span key={tag}>#{tag}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
-                {item.sourceText && (
-                  <blockquote className="sourceText">{item.sourceText}</blockquote>
-                )}
-
-                {item.kind === "follow" ? (
-                  <div className="followBlock">
-                    <strong>{item.accountHandle}</strong>
-                    <p>{item.accountReason}</p>
-                  </div>
-                ) : (
-                  <div className="draftBlock">
-                    <div className="draftLabel">Suggested {item.kind}</div>
-                    <p>{draft}</p>
-                  </div>
-                )}
-
-                <div className="reasonGrid">
-                  <div>
-                    <span>WHY IT MATTERS</span>
-                    <p>{item.whyItMatters}</p>
-                  </div>
-                  <div>
-                    <span>YOUR ANGLE</span>
-                    <p>{item.angle}</p>
-                  </div>
-                </div>
-
-                <div className="tags">
-                  {item.tags.map((tag) => (
-                    <span key={tag}>#{tag}</span>
-                  ))}
-                </div>
-
-                <div className="actions">
-                  {item.kind === "follow" ? (
-                    <a
-                      href={item.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="primaryButton"
-                    >
-                      Open profile
-                    </a>
-                  ) : (
-                    <>
-                      <button
-                        className="primaryButton"
-                        onClick={() => copyDraft(item)}
-                      >
-                        {copiedId === item.id ? "Copied" : "Copy"}
-                      </button>
-                      <button
-                        className="secondaryButton"
-                        onClick={() => rewrite(item)}
-                      >
-                        Rewrite
-                      </button>
-                    </>
-                  )}
-                  <button className="skipButton" onClick={() => skip(item.id)}>
-                    Skip
+          {showTraining && current.kind !== "follow" && (
+            <div className="trainingPanel">
+              <span>How does this sound?</span>
+              <div>
+                {feedbackLabels.map((item) => (
+                  <button key={item.tag} onClick={() => saveFeedback(item.tag)}>
+                    {item.label}
                   </button>
-                </div>
+                ))}
+              </div>
+              <small>{feedback.length} style signals saved on this device.</small>
+            </div>
+          )}
+        </article>
 
-                {item.kind !== "follow" && (
-                  <div className="feedbackRow">
-                    <span>Train voice:</span>
-                    {feedbackLabels.map((feedbackItem) => (
-                      <button
-                        key={feedbackItem.tag}
-                        onClick={() =>
-                          saveFeedback(item.id, feedbackItem.tag)
-                        }
-                      >
-                        {feedbackItem.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </article>
-            );
-          })
-        )}
+        <div className="sessionFooter">
+          <span>{queue.length - 1} actions waiting after this one</span>
+          {lastAction && (
+            <button onClick={undo}>
+              Undo {lastAction.result === "done" ? "done" : "skip"}
+            </button>
+          )}
+        </div>
       </section>
-
-      <footer>
-        <span>V1 · manual X actions · no credentials required</span>
-        <span>Research + Gemini + memory come next.</span>
-      </footer>
     </main>
   );
 }
