@@ -146,6 +146,20 @@ export default function Home() {
   }
 
   const draft = currentDraft(current);
+  const exactXPostUrl =
+    current.xPostUrl && /^https:\/\/(www\.)?x\.com\/[^/]+\/status\/\d+/.test(current.xPostUrl)
+      ? current.xPostUrl
+      : null;
+  const primaryExternalUrl =
+    current.kind === "follow"
+      ? current.profileUrl ?? current.sourceUrl
+      : exactXPostUrl ?? current.sourceUrl;
+  const externalLabel =
+    current.kind === "follow"
+      ? "Open profile ↗"
+      : exactXPostUrl
+        ? "Open on X ↗"
+        : "Open source ↗";
 
   return (
     <main className="agentShell">
@@ -218,12 +232,12 @@ export default function Home() {
           <div className="primaryActions">
             {current.kind === "follow" ? (
               <a
-                href={current.sourceUrl}
+                href={primaryExternalUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="primaryButton"
               >
-                Open profile ↗
+                {externalLabel}
               </a>
             ) : (
               <>
@@ -231,12 +245,12 @@ export default function Home() {
                   {copied ? "Copied ✓" : "Copy text"}
                 </button>
                 <a
-                  href={current.sourceUrl}
+                  href={primaryExternalUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="secondaryButton"
                 >
-                  Open on X ↗
+                  {externalLabel}
                 </a>
               </>
             )}
