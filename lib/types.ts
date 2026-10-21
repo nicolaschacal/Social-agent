@@ -15,6 +15,8 @@ export type Opportunity = {
   title: string;
   sourceName: string;
   sourceUrl: string;
+  xPostUrl?: string;
+  profileUrl?: string;
   sourceText?: string;
   whyItMatters: string;
   angle: string;
